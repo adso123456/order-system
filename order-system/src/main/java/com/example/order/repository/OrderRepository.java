@@ -17,4 +17,8 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
                  @Param("paid") OrderStatus paid,
                  @Param("pending") OrderStatus pending,
                  @Param("now") LocalDateTime now);
+
+    @Modifying(clearAutomatically = true)
+    @Query("UPDATE Order o SET o.status = com.example.order.entity.OrderStatus.CANCELLED WHERE o.id = :id AND o.status = :pending")
+    int cancelOrder(@Param("id") Long id, @Param("pending") OrderStatus pending);
 }

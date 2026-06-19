@@ -76,7 +76,7 @@
   - [ ] 能讲清一个 HTTP 请求从进入到返回经过哪些层
   - [ ] 商品 CRUD 全通，参数校验和异常处理生效
   - [ ] 下单是一个事务，并发不超卖（乐观锁）
-  - [ ] 取消订单幂等、库存正确恢复
+  - [x] 取消订单幂等、库存正确恢复
   - [ ] 订单超时能自动取消，支付后不误取消
   - [ ] 登录用 JWT，接口按权限拦截
   - [ ] 接了缓存、写了测试、有 Swagger 文档
@@ -132,7 +132,7 @@
   - 依赖：T6
   - 验证：PENDING→PAID 正常支付（paidAt 有值）；重复支付→409；不存在订单→404；CANCELLED 支付→409；条件更新（UPDATE WHERE status=PENDING）按影响行数判结果，0 行时 existsById 区分 404/409
 
-- [ ] **T8** 用户主动取消订单（条件更新 + 幂等 + 恢复库存）
+- [x] **T8** 用户主动取消订单（条件更新 + 幂等 + 恢复库存） ✅ 已完成
   - 文件：`service/OrderService.java`（新增 `cancelOrder` 方法）、`controller/OrderController.java`（新增 `POST /orders/{id}/cancel`）
   - 依赖：T7
   - 验证：取消后订单状态变为 CANCELLED，库存恢复；重复调取消接口，结果一致（幂等）；已支付订单取消被拒绝
@@ -204,13 +204,13 @@
   - 依赖：T18
   - 验证：改写后的接口行为与改写前完全一致，能说出 JPA 和 MyBatis 的差异
 
-**👈 当前进行到**：T8
+**👈 当前进行到**：T9
 
 ## 6. 进度日志（Progress Log）
 
 > 每完成一步追加一条，最新的放最上面。
 
-- **2026-06-19** — T7 模拟支付完成 ｜ 验证：POST /orders/{id}/pay，条件更新 `UPDATE SET status=PAID, paid_at=NOW WHERE id=? AND status='PENDING'` 原子操作，影响行数判结果（1→成功，0→existsById 区分 404/409）；PENDING→PAID 正常支付 paidAt 有值；重复支付→409；不存在→404；CANCELLED→409；OrderStatus 枚举加 PAID/CANCELLED；IllegalOrderStateException→409 ｜ 下一步：T8 用户主动取消订单
+- **2026-06-19** — T8 主动取消订单完成 ｜ 验证：POST /orders/{id}/cancel，OrderRepository.cancelOrder 条件更新 `UPDATE orders SET status='CANCELLED' WHERE id=? AND status='PENDING'`（JPQL 枚举常量，clearAutomatically=true）；ProductRepository.restoreStock 纯原子增 `SET stock=stock+? WHERE id=?`（不走 @Version 避免恢复时冲突）；@Transactional cancelOrder 先改状态再逐商品恢复库存；幂等保证：条件更新 0 行时 existsById 区分 404/409，仅影响 1 行才恢复库存。测试覆盖：正常取消（库存 8→10）√、重复取消（第二次 409 库存保持 10 不变成 12）√、取消已支付订单（409 库存不动）√、取消不存在订单（404）√。**cancelOrder 方法已抽成独立可复用方法，T9 超时取消直接复用** ｜ 下一步：T9 Redis 超时自动取消 ｜ 验证：POST /orders/{id}/pay，条件更新 `UPDATE SET status=PAID, paid_at=NOW WHERE id=? AND status='PENDING'` 原子操作，影响行数判结果（1→成功，0→existsById 区分 404/409）；PENDING→PAID 正常支付 paidAt 有值；重复支付→409；不存在→404；CANCELLED→409；OrderStatus 枚举加 PAID/CANCELLED；IllegalOrderStateException→409 ｜ 下一步：T8 用户主动取消订单
 - **2026-06-19** — T6 订单模块完成 ｜ 验证：Order + OrderItem 实体建表（orders/order_item），POST /orders 下单接口（@Transactional 事务内查商品→扣库存→建订单明细），@Version 乐观锁扣库存，ObjectOptimisticLockingFailureException→409，InsufficientStockException→400；并发 20 线程抢 10 库存，定理验证通过（stock≥0 且扣减守恒）。**🪤 踩坑记录：乐观锁的并发测试不应该追求"恰好 N 次成功"，因为 MySQL REPEATABLE_READ 快照隔离下，前几个事务会在第一轮提交前读到相同旧版本，仅少数成功。乐观锁只保证不超卖，不保证能卖完——正确断言是"库存≥0 + 扣减守恒定理"。之前为了凑"恰好 10 成功"反复调时序（随机 jitter/提交间隔/flush），最后全回退了——测试是用来验证逻辑的，不能反过来改业务代码迎合测试预期。** ｜ 下一步：T7 模拟支付接口
 - **2026-06-19** — T5 全局异常处理 + 统一返回结构完成 ｜ 验证：ApiResponse<T> (code/message/data) 统一包裹所有返回；ResourceNotFoundException→404 (HTTP 状态码=body code)；MethodArgumentNotValidException→400 收集全部字段错误；兜底 Exception→500 不暴露堆栈(仅 log.error) ｜ 下一步：T6 订单模块 Entity+建表+下单(事务+乐观锁)
 - **2026-06-19** — T4 商品 Service + Controller + DTO + 校验完成 ｜ 验证：5 个接口全通（增删改查+列表）；@Valid 校验生效（空名→400/负价→400/负库存→400）；update 只动 name+price+stock，createdAt 不变；version 字段 @Version 自动初始化=0；查不存在 id 返回 500（已知，T5 收） ｜ 下一步：T5 全局异常处理 + 统一返回结构

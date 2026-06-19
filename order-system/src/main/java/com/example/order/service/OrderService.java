@@ -107,6 +107,23 @@ public class OrderService {
         return OrderResponse.fromEntity(order);
     }
 
+    @Transactional
+    public OrderResponse cancelOrder(Long orderId) {
+        int updated = orderRepository.cancelOrder(orderId, OrderStatus.PENDING);
+        if (updated == 0) {
+            if (!orderRepository.existsById(orderId)) {
+                throw new ResourceNotFoundException("订单不存在: id=" + orderId);
+            }
+            throw new IllegalOrderStateException("订单状态不允许取消");
+        }
+        // 恢复库存（仅在实际取消时执行，确保幂等取消不会多还库存）
+        Order order = orderRepository.findById(orderId).orElseThrow();
+        for (OrderItem item : order.getItems()) {
+            productRepository.restoreStock(item.getProductId(), item.getQuantity());
+        }
+        return OrderResponse.fromEntity(order);
+    }
+
     private String generateOrderNo() {
         return UUID.randomUUID().toString().replace("-", "").substring(0, 16).toUpperCase();
     }

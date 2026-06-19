@@ -26,4 +26,9 @@ public class OrderController {
     public ApiResponse<OrderResponse> payOrder(@PathVariable Long id) {
         return ApiResponse.success(orderService.payOrder(id));
     }
+
+    @PostMapping("/{id}/cancel")
+    public ApiResponse<OrderResponse> cancelOrder(@PathVariable Long id) {
+        return ApiResponse.success(orderService.cancelOrder(id));
+    }
 }

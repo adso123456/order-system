@@ -164,6 +164,67 @@ class OrderServiceTest {
                 .hasMessageContaining("订单状态不允许支付");
     }
 
+    // ===== T8 取消订单测试 =====
+
+    @Test
+    void shouldCancelOrderSuccessfully() {
+        Product p = createProduct("取消测试商品", new BigDecimal("50.00"), 10);
+        OrderResponse created = orderService.placeOrder(buildOrderRequest(1L, p.getId(), 2));
+        assertThat(created.getStatus()).isEqualTo("PENDING");
+
+        // 下单后库存扣减
+        Product afterOrder = productRepository.findById(p.getId()).orElseThrow();
+        assertThat(afterOrder.getStock()).isEqualTo(8);
+
+        // 取消订单
+        OrderResponse cancelled = orderService.cancelOrder(created.getId());
+        assertThat(cancelled.getStatus()).isEqualTo("CANCELLED");
+
+        // 库存恢复
+        Product afterCancel = productRepository.findById(p.getId()).orElseThrow();
+        assertThat(afterCancel.getStock()).isEqualTo(10);
+    }
+
+    @Test
+    void shouldRejectDuplicateCancel() {
+        Product p = createProduct("重复取消商品", new BigDecimal("50.00"), 10);
+        OrderResponse created = orderService.placeOrder(buildOrderRequest(1L, p.getId(), 2));
+
+        orderService.cancelOrder(created.getId()); // 第一次取消
+
+        // 第二次取消应返回 409
+        assertThatThrownBy(() -> orderService.cancelOrder(created.getId()))
+                .isInstanceOf(IllegalOrderStateException.class)
+                .hasMessageContaining("订单状态不允许取消");
+
+        // 库存只恢复一次，不会多还
+        Product after = productRepository.findById(p.getId()).orElseThrow();
+        assertThat(after.getStock()).isEqualTo(10);
+    }
+
+    @Test
+    void shouldRejectCancelForPaidOrder() {
+        Product p = createProduct("已支付取消商品", new BigDecimal("99.00"), 5);
+        OrderResponse created = orderService.placeOrder(buildOrderRequest(1L, p.getId(), 1));
+        orderService.payOrder(created.getId());
+
+        // 取消已支付订单应返回 409
+        assertThatThrownBy(() -> orderService.cancelOrder(created.getId()))
+                .isInstanceOf(IllegalOrderStateException.class)
+                .hasMessageContaining("订单状态不允许取消");
+
+        // 库存不变
+        Product after = productRepository.findById(p.getId()).orElseThrow();
+        assertThat(after.getStock()).isEqualTo(4);
+    }
+
+    @Test
+    void shouldRejectCancelForNonExistentOrder() {
+        assertThatThrownBy(() -> orderService.cancelOrder(99999L))
+                .isInstanceOf(ResourceNotFoundException.class)
+                .hasMessageContaining("订单不存在");
+    }
+
     // ===== 辅助方法 =====
     private Product createProduct(String name, BigDecimal price, int stock) {
         Product p = new Product(name, price, stock);
