@@ -1,5 +1,6 @@
 package com.example.order.service;
 
+import com.example.order.common.IllegalOrderStateException;
 import com.example.order.common.InsufficientStockException;
 import com.example.order.common.ResourceNotFoundException;
 import com.example.order.dto.OrderRequest;
@@ -14,6 +15,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -88,6 +90,21 @@ public class OrderService {
 
         Order saved = orderRepository.save(order);
         return OrderResponse.fromEntity(saved);
+    }
+
+    @Transactional
+    public OrderResponse payOrder(Long orderId) {
+        // 条件更新：只更新 PENDING 状态的订单，原子操作无需加锁
+        int updated = orderRepository.payOrder(orderId, OrderStatus.PAID, OrderStatus.PENDING, LocalDateTime.now());
+        if (updated == 0) {
+            if (!orderRepository.existsById(orderId)) {
+                throw new ResourceNotFoundException("订单不存在: id=" + orderId);
+            }
+            throw new IllegalOrderStateException("订单状态不允许支付");
+        }
+        // clearAutomatically 已清空持久化上下文，findById 读到 PAID 状态
+        Order order = orderRepository.findById(orderId).orElseThrow();
+        return OrderResponse.fromEntity(order);
     }
 
     private String generateOrderNo() {

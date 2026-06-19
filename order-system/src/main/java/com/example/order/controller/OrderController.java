@@ -21,4 +21,9 @@ public class OrderController {
     public ApiResponse<OrderResponse> placeOrder(@Valid @RequestBody OrderRequest request) {
         return ApiResponse.success(orderService.placeOrder(request));
     }
+
+    @PostMapping("/{id}/pay")
+    public ApiResponse<OrderResponse> payOrder(@PathVariable Long id) {
+        return ApiResponse.success(orderService.payOrder(id));
+    }
 }

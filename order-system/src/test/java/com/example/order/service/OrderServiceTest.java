@@ -1,8 +1,12 @@
 package com.example.order.service;
 
+import com.example.order.common.IllegalOrderStateException;
 import com.example.order.common.InsufficientStockException;
+import com.example.order.common.ResourceNotFoundException;
 import com.example.order.dto.OrderRequest;
 import com.example.order.dto.OrderResponse;
+import com.example.order.entity.Order;
+import com.example.order.entity.OrderStatus;
 import com.example.order.entity.Product;
 import com.example.order.repository.OrderRepository;
 import com.example.order.repository.ProductRepository;
@@ -112,6 +116,52 @@ class OrderServiceTest {
 
         // 统计完整性: 成功 + 失败 == 总请求数
         assertThat(successes + fails).isEqualTo(threads);
+    }
+
+    // ===== T7 支付测试 =====
+
+    @Test
+    void shouldPayOrderSuccessfully() {
+        Product p = createProduct("支付测试商品", new BigDecimal("99.00"), 10);
+        OrderResponse created = orderService.placeOrder(buildOrderRequest(1L, p.getId(), 1));
+        assertThat(created.getStatus()).isEqualTo("PENDING");
+
+        OrderResponse paid = orderService.payOrder(created.getId());
+        assertThat(paid.getStatus()).isEqualTo("PAID");
+        assertThat(paid.getPaidAt()).isNotNull();
+    }
+
+    @Test
+    void shouldRejectDuplicatePayment() {
+        Product p = createProduct("重复支付商品", new BigDecimal("50.00"), 5);
+        OrderResponse created = orderService.placeOrder(buildOrderRequest(1L, p.getId(), 1));
+        orderService.payOrder(created.getId()); // 第一次支付成功
+
+        assertThatThrownBy(() -> orderService.payOrder(created.getId()))
+                .isInstanceOf(IllegalOrderStateException.class)
+                .hasMessageContaining("订单状态不允许支付");
+    }
+
+    @Test
+    void shouldRejectPaymentForNonExistentOrder() {
+        assertThatThrownBy(() -> orderService.payOrder(99999L))
+                .isInstanceOf(ResourceNotFoundException.class)
+                .hasMessageContaining("订单不存在");
+    }
+
+    @Test
+    void shouldRejectPaymentForCancelledOrder() {
+        Product p = createProduct("已取消商品", new BigDecimal("30.00"), 5);
+        OrderResponse created = orderService.placeOrder(buildOrderRequest(1L, p.getId(), 1));
+
+        // 手动改为 CANCELLED（模拟 T8 场景）
+        Order order = orderRepository.findById(created.getId()).orElseThrow();
+        order.setStatus(OrderStatus.CANCELLED);
+        orderRepository.save(order);
+
+        assertThatThrownBy(() -> orderService.payOrder(created.getId()))
+                .isInstanceOf(IllegalOrderStateException.class)
+                .hasMessageContaining("订单状态不允许支付");
     }
 
     // ===== 辅助方法 =====

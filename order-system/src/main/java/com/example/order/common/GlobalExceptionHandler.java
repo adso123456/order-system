@@ -44,6 +44,12 @@ public class GlobalExceptionHandler {
         return ApiResponse.error(409, "下单失败,请重试");
     }
 
+    @ExceptionHandler(IllegalOrderStateException.class)
+    @ResponseStatus(HttpStatus.CONFLICT)
+    public ApiResponse<Void> handleIllegalOrderState(IllegalOrderStateException ex) {
+        return ApiResponse.error(409, ex.getMessage());
+    }
+
     @ExceptionHandler(Exception.class)
     @ResponseStatus(HttpStatus.INTERNAL_SERVER_ERROR)
     public ApiResponse<Void> handleOther(Exception ex) {

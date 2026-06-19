@@ -13,6 +13,7 @@ public class OrderResponse {
     private String status;
     private BigDecimal totalAmount;
     private LocalDateTime createdAt;
+    private LocalDateTime paidAt;
     private List<ItemResponse> items;
 
     public static OrderResponse fromEntity(Order order) {
@@ -23,6 +24,7 @@ public class OrderResponse {
         resp.setStatus(order.getStatus().name());
         resp.setTotalAmount(order.getTotalAmount());
         resp.setCreatedAt(order.getCreatedAt());
+        resp.setPaidAt(order.getPaidAt());
         resp.setItems(order.getItems().stream()
                 .map(item -> {
                     ItemResponse ir = new ItemResponse();
@@ -54,6 +56,9 @@ public class OrderResponse {
 
     public LocalDateTime getCreatedAt() { return createdAt; }
     public void setCreatedAt(LocalDateTime createdAt) { this.createdAt = createdAt; }
+
+    public LocalDateTime getPaidAt() { return paidAt; }
+    public void setPaidAt(LocalDateTime paidAt) { this.paidAt = paidAt; }
 
     public List<ItemResponse> getItems() { return items; }
     public void setItems(List<ItemResponse> items) { this.items = items; }
