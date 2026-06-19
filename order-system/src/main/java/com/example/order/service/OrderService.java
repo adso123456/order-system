@@ -11,10 +11,13 @@ import com.example.order.entity.OrderStatus;
 import com.example.order.entity.Product;
 import com.example.order.repository.OrderRepository;
 import com.example.order.repository.ProductRepository;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.time.Instant;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
@@ -27,10 +30,17 @@ public class OrderService {
 
     private final OrderRepository orderRepository;
     private final ProductRepository productRepository;
+    private final StringRedisTemplate redisTemplate;
+    private final long timeoutSeconds;
 
-    public OrderService(OrderRepository orderRepository, ProductRepository productRepository) {
+    public OrderService(OrderRepository orderRepository,
+                        ProductRepository productRepository,
+                        StringRedisTemplate redisTemplate,
+                        @Value("${order.timeout-seconds}") long timeoutSeconds) {
         this.orderRepository = orderRepository;
         this.productRepository = productRepository;
+        this.redisTemplate = redisTemplate;
+        this.timeoutSeconds = timeoutSeconds;
     }
 
     @Transactional
@@ -89,6 +99,9 @@ public class OrderService {
         order.setItems(orderItems);
 
         Order saved = orderRepository.save(order);
+        // 写入 Redis ZSet 延时队列，score = 当前时间戳 + 超时秒数
+        long deadline = Instant.now().getEpochSecond() + timeoutSeconds;
+        redisTemplate.opsForZSet().add("order:delay", saved.getId().toString(), deadline);
         return OrderResponse.fromEntity(saved);
     }
 
