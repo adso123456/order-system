@@ -107,7 +107,7 @@
   - 依赖：T1
   - 验证：用 VS Code 命令面板（Ctrl+Shift+P）的 Spring Initializr 生成项目；`mvn spring-boot:run` 启动成功；`curl localhost:8080/hello` 返回 200
 
-- [ ] **T3** 商品模块 — Entity + Repository + 建表
+- [x] **T3** 商品模块 — Entity + Repository + 建表
   - 文件：`entity/Product.java`、`repository/ProductRepository.java`、`application.yml`（DDL 配置）
   - 依赖：T2
   - 验证：应用启动后数据库自动建表 `product`；Repository 的 `findAll()` 可查
@@ -204,12 +204,13 @@
   - 依赖：T18
   - 验证：改写后的接口行为与改写前完全一致，能说出 JPA 和 MyBatis 的差异
 
-**👈 当前进行到**：T3
+**👈 当前进行到**：T4
 
 ## 6. 进度日志（Progress Log）
 
 > 每完成一步追加一条，最新的放最上面。
 
+- **2026-06-19** — T3 商品 Entity + Repository + 建表完成 ｜ 验证：Product entity (BigDecimal price + @Version version) 创建，ProductRepository 扫描到，`ddl-auto: update` 自动生成 product 表（decimal(10,2)/version 字段正确），DataSourceAutoConfiguration 排除已移除，order_system 库已建 ｜ 下一步：T4 商品 Service + Controller + DTO + 参数校验
 - **2026-06-19** — T2 创建 Spring Boot 项目骨架完成 ｜ 验证：`./mvnw spring-boot:run` 启动成功（端口 8080），`curl localhost:8080/hello` 返回 "Hello, Order System!"；分层目录（controller/service/repository/entity/dto/common/config/security）已建；阿里云 Maven 镜像已配 ｜ 下一步：T3 商品模块 Entity + Repository + 建表
 - **2026-06-19** — T1 环境搭建完成 ｜ 验证：Java 17.0.9 + JAVA_HOME 已配；VS Code 已装 Java/Spring 插件包；MySQL 8 + Redis 7 通过 Docker 运行（端口 3307/6379），连通性验证通过；Postman 已装；Maven 跳过（T2 后用 mvnw） ｜ 下一步：T2 创建 Spring Boot 项目骨架
 - **2026-06-19** — 项目立项，PLAN.md 创建完成。尚未开始实施。
