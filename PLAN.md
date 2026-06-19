@@ -112,12 +112,12 @@
   - 依赖：T2
   - 验证：应用启动后数据库自动建表 `product`；Repository 的 `findAll()` 可查
 
-- [ ] **T4** 商品模块 — Service + Controller + DTO + 参数校验
+- [x] **T4** 商品模块 — Service + Controller + DTO + 参数校验
   - 文件：`dto/ProductRequest.java`、`dto/ProductResponse.java`、`service/ProductService.java`、`controller/ProductController.java`
   - 依赖：T3
   - 验证：Postman 调通商品 5 个接口（增删改查+列表），传非法参数被 `@Valid` 拦截返回 400
 
-- [ ] **T5** 全局异常处理 + 统一返回结构
+- [x] **T5** 全局异常处理 + 统一返回结构
   - 文件：`common/ApiResponse.java`、`common/GlobalExceptionHandler.java`
   - 依赖：T4
   - 验证：传非法参数返回统一 JSON 结构 `{"code":400,"message":"...","data":null}`；访问不存在的商品返回统一 404 结构
@@ -204,12 +204,14 @@
   - 依赖：T18
   - 验证：改写后的接口行为与改写前完全一致，能说出 JPA 和 MyBatis 的差异
 
-**👈 当前进行到**：T4
+**👈 当前进行到**：T6
 
 ## 6. 进度日志（Progress Log）
 
 > 每完成一步追加一条，最新的放最上面。
 
+- **2026-06-19** — T5 全局异常处理 + 统一返回结构完成 ｜ 验证：ApiResponse<T> (code/message/data) 统一包裹所有返回；ResourceNotFoundException→404 (HTTP 状态码=body code)；MethodArgumentNotValidException→400 收集全部字段错误；兜底 Exception→500 不暴露堆栈(仅 log.error) ｜ 下一步：T6 订单模块 Entity+建表+下单(事务+乐观锁)
+- **2026-06-19** — T4 商品 Service + Controller + DTO + 校验完成 ｜ 验证：5 个接口全通（增删改查+列表）；@Valid 校验生效（空名→400/负价→400/负库存→400）；update 只动 name+price+stock，createdAt 不变；version 字段 @Version 自动初始化=0；查不存在 id 返回 500（已知，T5 收） ｜ 下一步：T5 全局异常处理 + 统一返回结构
 - **2026-06-19** — T3 商品 Entity + Repository + 建表完成 ｜ 验证：Product entity (BigDecimal price + @Version version) 创建，ProductRepository 扫描到，`ddl-auto: update` 自动生成 product 表（decimal(10,2)/version 字段正确），DataSourceAutoConfiguration 排除已移除，order_system 库已建 ｜ 下一步：T4 商品 Service + Controller + DTO + 参数校验
 - **2026-06-19** — T2 创建 Spring Boot 项目骨架完成 ｜ 验证：`./mvnw spring-boot:run` 启动成功（端口 8080），`curl localhost:8080/hello` 返回 "Hello, Order System!"；分层目录（controller/service/repository/entity/dto/common/config/security）已建；阿里云 Maven 镜像已配 ｜ 下一步：T3 商品模块 Entity + Repository + 建表
 - **2026-06-19** — T1 环境搭建完成 ｜ 验证：Java 17.0.9 + JAVA_HOME 已配；VS Code 已装 Java/Spring 插件包；MySQL 8 + Redis 7 通过 Docker 运行（端口 3307/6379），连通性验证通过；Postman 已装；Maven 跳过（T2 后用 mvnw） ｜ 下一步：T2 创建 Spring Boot 项目骨架
