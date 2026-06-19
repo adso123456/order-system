@@ -181,6 +181,7 @@
 
 - [ ] **T17** 用 RabbitMQ 延迟队列替换 Redis ZSet 超时取消
   - 文件：`config/RabbitMQConfig.java`（加死信队列配置）、移除 `OrderTimeoutService.java` 的 ZSet 轮询逻辑
+	  - > 💡 **设计备忘**：cancelOrder 的幂等（条件更新 `WHERE status=PENDING`）和状态校验兜底（IllegalOrderStateException/ResourceNotFoundException 跳过）**原样复用**，只替换"延迟触发机制"（ZSet 轮询 → MQ 延迟/死信队列）。主动取消保持同步调用，超时取消走 MQ 消费者，**两者共用同一个 cancelOrder 方法**。
   - 依赖：T16
   - 验证：超时取消行为与 T9 一致，但不依赖定时轮询；延迟消息到时间自动触发取消
 
