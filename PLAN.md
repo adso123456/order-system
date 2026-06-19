@@ -122,10 +122,10 @@
   - 依赖：T4
   - 验证：传非法参数返回统一 JSON 结构 `{"code":400,"message":"...","data":null}`；访问不存在的商品返回统一 404 结构
 
-- [ ] **T6** 订单模块 — Entity + 建表 + 下单接口（含事务、乐观锁扣库存）
-  - 文件：`entity/Order.java`、`entity/OrderItem.java`、`dto/CreateOrderRequest.java`、`service/OrderService.java`、`controller/OrderController.java`、`repository/OrderRepository.java`
+- [x] **T6** 订单模块 — Entity + 建表 + 下单接口（含事务、乐观锁扣库存） ✅ 已完成
+  - 文件：`entity/Order.java`、`entity/OrderItem.java`、`entity/OrderStatus.java`、`dto/OrderRequest.java`、`dto/OrderResponse.java`、`service/OrderService.java`、`controller/OrderController.java`、`repository/OrderRepository.java`、`common/InsufficientStockException.java`
   - 依赖：T5
-  - 验证：Postman 调下单接口成功，数据库 order + order_item 有记录，product 库存正确扣减；写一个简单的多线程测试（开几个线程同时调下单接口），验证：① 库存不超卖、不为负；② 能讲清**为什么部分下单请求被拒了是预期行为**——乐观锁下版本号冲突导致部分请求失败，这不是 bug，是并发控制的正常结果。不要为了测这个去学 JMeter，那是另一个兔子洞。
+  - 验证：正常下单成功；库存不足被拒（InsufficientStockException→400）；并发测试 20 线程抢 10 库存→定理验证通过（stock≥0 + 扣减守恒），乐观锁冲突由全局异常处理器捕获返回 409 "下单失败,请重试"
 
 - [ ] **T7** 模拟支付接口
   - 文件：`service/OrderService.java`（新增 `payOrder` 方法）、`controller/OrderController.java`（新增 `POST /orders/{id}/pay`）
@@ -204,13 +204,13 @@
   - 依赖：T18
   - 验证：改写后的接口行为与改写前完全一致，能说出 JPA 和 MyBatis 的差异
 
-**👈 当前进行到**：T6
+**👈 当前进行到**：T7
 
 ## 6. 进度日志（Progress Log）
 
 > 每完成一步追加一条，最新的放最上面。
 
-- **2026-06-19** — T5 全局异常处理 + 统一返回结构完成 ｜ 验证：ApiResponse<T> (code/message/data) 统一包裹所有返回；ResourceNotFoundException→404 (HTTP 状态码=body code)；MethodArgumentNotValidException→400 收集全部字段错误；兜底 Exception→500 不暴露堆栈(仅 log.error) ｜ 下一步：T6 订单模块 Entity+建表+下单(事务+乐观锁)
+- **2026-06-19** — T6 订单模块完成 ｜ 验证：Order + OrderItem 实体建表（orders/order_item），POST /orders 下单接口（@Transactional 事务内查商品→扣库存→建订单明细），@Version 乐观锁扣库存，ObjectOptimisticLockingFailureException→409，InsufficientStockException→400；并发 20 线程抢 10 库存，定理验证通过（stock≥0 且扣减守恒）。**🪤 踩坑记录：乐观锁的并发测试不应该追求"恰好 N 次成功"，因为 MySQL REPEATABLE_READ 快照隔离下，前几个事务会在第一轮提交前读到相同旧版本，仅少数成功。乐观锁只保证不超卖，不保证能卖完——正确断言是"库存≥0 + 扣减守恒定理"。之前为了凑"恰好 10 成功"反复调时序（随机 jitter/提交间隔/flush），最后全回退了——测试是用来验证逻辑的，不能反过来改业务代码迎合测试预期。** ｜ 下一步：T7 模拟支付接口
 - **2026-06-19** — T4 商品 Service + Controller + DTO + 校验完成 ｜ 验证：5 个接口全通（增删改查+列表）；@Valid 校验生效（空名→400/负价→400/负库存→400）；update 只动 name+price+stock，createdAt 不变；version 字段 @Version 自动初始化=0；查不存在 id 返回 500（已知，T5 收） ｜ 下一步：T5 全局异常处理 + 统一返回结构
 - **2026-06-19** — T3 商品 Entity + Repository + 建表完成 ｜ 验证：Product entity (BigDecimal price + @Version version) 创建，ProductRepository 扫描到，`ddl-auto: update` 自动生成 product 表（decimal(10,2)/version 字段正确），DataSourceAutoConfiguration 排除已移除，order_system 库已建 ｜ 下一步：T4 商品 Service + Controller + DTO + 参数校验
 - **2026-06-19** — T2 创建 Spring Boot 项目骨架完成 ｜ 验证：`./mvnw spring-boot:run` 启动成功（端口 8080），`curl localhost:8080/hello` 返回 "Hello, Order System!"；分层目录（controller/service/repository/entity/dto/common/config/security）已建；阿里云 Maven 镜像已配 ｜ 下一步：T3 商品模块 Entity + Repository + 建表

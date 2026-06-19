@@ -8,6 +8,8 @@ import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 
+import org.springframework.orm.ObjectOptimisticLockingFailureException;
+
 import java.util.stream.Collectors;
 
 @RestControllerAdvice
@@ -28,6 +30,18 @@ public class GlobalExceptionHandler {
                 .map(fe -> fe.getField() + ": " + fe.getDefaultMessage())
                 .collect(Collectors.joining("; "));
         return ApiResponse.error(400, message);
+    }
+
+    @ExceptionHandler(InsufficientStockException.class)
+    @ResponseStatus(HttpStatus.BAD_REQUEST)
+    public ApiResponse<Void> handleInsufficientStock(InsufficientStockException ex) {
+        return ApiResponse.error(400, ex.getMessage());
+    }
+
+    @ExceptionHandler(ObjectOptimisticLockingFailureException.class)
+    @ResponseStatus(HttpStatus.CONFLICT)
+    public ApiResponse<Void> handleOptimisticLock(ObjectOptimisticLockingFailureException ex) {
+        return ApiResponse.error(409, "下单失败,请重试");
     }
 
     @ExceptionHandler(Exception.class)
