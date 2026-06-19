@@ -97,12 +97,12 @@
 
 ### 第一遍 · 单体应用
 
-- [ ] **T1** 环境搭建：装 JDK 17、VS Code、MySQL、Redis、Postman，配好 `JAVA_HOME`，装好 VS Code 的 Java 与 Spring 插件包，验证各组件可用
+- [x] **T1** 环境搭建：装 JDK 17、VS Code、MySQL、Redis、Postman，配好 `JAVA_HOME`，装好 VS Code 的 Java 与 Spring 插件包，验证各组件可用
   - 文件：无（环境配置）
   - 依赖：无
   - 验证：`java -version` 输出 17；`mysql -u root -p` 可登录；`redis-cli ping` 返回 PONG；VS Code 已装 Extension Pack for Java（Red Hat）和 Spring Boot Extension Pack，能跑 Hello World
 
-- [ ] **T2** 创建 Spring Boot 项目骨架：Spring Initializr 建项目，配好 `application.yml`，建分层目录结构
+- [x] **T2** 创建 Spring Boot 项目骨架：Spring Initializr 建项目，配好 `application.yml`，建分层目录结构
   - 文件：`pom.xml`、`application.yml`、包结构 `controller/service/repository/entity/dto`
   - 依赖：T1
   - 验证：用 VS Code 命令面板（Ctrl+Shift+P）的 Spring Initializr 生成项目；`mvn spring-boot:run` 启动成功；`curl localhost:8080/hello` 返回 200
@@ -204,12 +204,14 @@
   - 依赖：T18
   - 验证：改写后的接口行为与改写前完全一致，能说出 JPA 和 MyBatis 的差异
 
-**👈 当前进行到**：T1
+**👈 当前进行到**：T3
 
 ## 6. 进度日志（Progress Log）
 
 > 每完成一步追加一条，最新的放最上面。
 
+- **2026-06-19** — T2 创建 Spring Boot 项目骨架完成 ｜ 验证：`./mvnw spring-boot:run` 启动成功（端口 8080），`curl localhost:8080/hello` 返回 "Hello, Order System!"；分层目录（controller/service/repository/entity/dto/common/config/security）已建；阿里云 Maven 镜像已配 ｜ 下一步：T3 商品模块 Entity + Repository + 建表
+- **2026-06-19** — T1 环境搭建完成 ｜ 验证：Java 17.0.9 + JAVA_HOME 已配；VS Code 已装 Java/Spring 插件包；MySQL 8 + Redis 7 通过 Docker 运行（端口 3307/6379），连通性验证通过；Postman 已装；Maven 跳过（T2 后用 mvnw） ｜ 下一步：T2 创建 Spring Boot 项目骨架
 - **2026-06-19** — 项目立项，PLAN.md 创建完成。尚未开始实施。
 
 ## 7. 变更记录（Changelog）
