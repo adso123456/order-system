@@ -144,12 +144,20 @@ public class OrderService {
         if (!order.getUserId().equals(getCurrentUserId())) {
             throw new ForbiddenException("无权操作该订单");
         }
+        return doCancel(orderId);
+    }
+
+    /**
+     * 执行取消逻辑（无归属校验），供定时任务等系统调用方使用。
+     */
+    @Transactional
+    OrderResponse doCancel(Long orderId) {
         int updated = orderRepository.cancelOrder(orderId, OrderStatus.PENDING);
         if (updated == 0) {
             throw new IllegalOrderStateException("订单状态不允许取消");
         }
         // 恢复库存（仅在实际取消时执行，确保幂等取消不会多还库存）
-        order = orderRepository.findById(orderId).orElseThrow();
+        Order order = orderRepository.findById(orderId).orElseThrow();
         for (OrderItem item : order.getItems()) {
             productRepository.restoreStock(item.getProductId(), item.getQuantity());
         }

@@ -44,7 +44,7 @@ public class OrderTimeoutService {
         for (String idStr : expiredIds) {
             Long orderId = Long.valueOf(idStr);
             try {
-                orderService.cancelOrder(orderId);
+                orderService.doCancel(orderId);
                 log.info("超时取消订单成功: orderId={}", orderId);
             } catch (IllegalOrderStateException | ResourceNotFoundException e) {
                 // 订单已支付 / 已取消 / 不存在，正常跳过

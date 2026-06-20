@@ -4,7 +4,7 @@
 > 新对话接手项目时，先完整读这份文件再动手。
 
 **状态**：第一遍进行中
-**创建于**：2026-06-19　**最后更新**：2026-06-20 12:23
+**创建于**：2026-06-19　**最后更新**：2026-06-20 14:00
 
 > ⚠️ **对零基础的提醒**：第一遍 T1~T15 看起来是 15 个任务，实际是正常节奏下**好几个月**的工程量。这不是缺点，是现实——你在从零搭建一个完整后端系统。把"第一遍完成"当成一个真正的里程碑去庆祝，别做完就立刻冲第二遍。
 
@@ -163,12 +163,12 @@
   - 依赖：T11（所有接口基本就绪）
   - 验证：访问 `http://localhost:8080/swagger-ui.html` 能看到所有接口并可在线调试；日志输出到控制台且格式清晰
 
-- [ ] **T14** 单元测试 — 下单、取消、库存扣减等关键 Service 👈 当前
+- [x] **T14** 单元测试 — 下单、取消、库存扣减等关键 Service ✅ 已完成
   - 文件：`src/test/java/.../service/OrderServiceTest.java`、`ProductServiceTest.java` 等
   - 依赖：T11
   - 验证：`mvn test` 全部通过；关键业务路径有测试覆盖（正常流程 + 异常流程）
 
-- [ ] **T15** Docker 容器化 — Dockerfile + docker-compose.yml
+- [ ] **T15** Docker 容器化 — Dockerfile + docker-compose.yml 👈 当前
   - 文件：`Dockerfile`、`docker-compose.yml`
   - 依赖：T14
   - 验证：`docker-compose up -d` 一键启动 app + MySQL + Redis；Postman 调接口正常返回
@@ -206,13 +206,13 @@
   - 依赖：T18
   - 验证：改写后的接口行为与改写前完全一致，能说出 JPA 和 MyBatis 的差异
 
-**👈 当前进行到**：T14
+**👈 当前进行到**：T15
 
 ## 6. 进度日志（Progress Log）
 
 > 每完成一步追加一条，最新的放最上面。
 
-- **2026-06-20** — T13 Swagger 接口文档 + 日志完成 | 验证：①pom.xml 加 springdoc-openapi-starter-webmvc-ui 2.8.8；②SecurityConfig permitAll 放行 Swagger 路径，但因 Spring Security 6.x 默认 MvcRequestMatcher 无法匹配静态资源(ResourceHttpRequestHandler)，追加 WebSecurityCustomizer.web.ignoring() 让 Swagger 静态资源完全绕过过滤器链；③新建 OpenApiConfig 配置 SecurityScheme bearer/JWT；④OrderService 三个关键方法各加 INFO 日志；⑤application.yaml 加 logging.pattern.console。curl 验证：/swagger-ui/index.html→200, /v3/api-docs→200, /orders(无token)→401(安全规则完好)。🪤 踩坑：改完 SecurityConfig 后 Swagger 仍 401——排查发现旧 Java 进程(PID 9904)一直占着 8080 没退，代码改动从未生效。杀掉重启后 web.ignoring() 才真加载，问题消失。教训：改配置类后先确认进程重启到位 | 下一步：T14 单元测试
+- **2026-06-20** — T14 单元测试完成 + 发现并修复一个跨任务回归 bug | 新增 15 个测试(3 新文件+1 追加)。🪤 **踩坑:T11 归属校验无意间破坏了 T9 超时取消**——T11 给 cancelOrder 加了 getCurrentUserId() 归属校验(SecurityContext 取当前用户),但 T9 的 OrderTimeoutService 定时任务跑在后台线程没有登录态,调 cancelOrder → getCurrentUserId() 抛 ForbiddenException("未登录")→未捕获→定时任务崩→订单永不超时取消。T14 测试发现 OrderTimeoutServiceTest 5 次稳定挂,排查日志定位根因。**修法**:OrderService 抽 doCancel(package-private,无归属校验,仅同包 service 层可调),cancelOrder(public)先做归属校验再委托 doCancel,OrderTimeoutService 改调 doCancel。**教训:给已有方法加鉴权时,要全局搜调用方——不是所有调用方都有用户上下文**(定时任务、MQ消费者、内部调用等)。这也是面试能讲的真实故事:安全加固时如何避免破坏后台系统任务。同时 OrderTimeoutServiceTest 用 Awaitility 轮询断言替换裸 Thread.sleep(10000),避免时序测试偶发失败。全量 29/29 稳定通过。下一步:T15 Docker 容器化 | 验证：①pom.xml 加 springdoc-openapi-starter-webmvc-ui 2.8.8；②SecurityConfig permitAll 放行 Swagger 路径，但因 Spring Security 6.x 默认 MvcRequestMatcher 无法匹配静态资源(ResourceHttpRequestHandler)，追加 WebSecurityCustomizer.web.ignoring() 让 Swagger 静态资源完全绕过过滤器链；③新建 OpenApiConfig 配置 SecurityScheme bearer/JWT；④OrderService 三个关键方法各加 INFO 日志；⑤application.yaml 加 logging.pattern.console。curl 验证：/swagger-ui/index.html→200, /v3/api-docs→200, /orders(无token)→401(安全规则完好)。🪤 踩坑：改完 SecurityConfig 后 Swagger 仍 401——排查发现旧 Java 进程(PID 9904)一直占着 8080 没退，代码改动从未生效。杀掉重启后 web.ignoring() 才真加载，问题消失。教训：改配置类后先确认进程重启到位 | 下一步：T14 单元测试
 - **2026-06-20** — T12 Redis 缓存商品详情完成 | 验证：@EnableCaching + RedisCacheManager(GenericJackson2JsonRedisSerializer JSON序列化,TTL 10分钟)；ProductService.findById @Cacheable(product::id)；update/delete @CacheEvict。日志增量证明缓存命中(两次查询仅1条SELECT)。redis-cli 确认 product::id 可读JSON且有TTL。🪤 缓存序列化踩坑：①自定义ObjectMapper未开activateDefaultTyping→LinkedHashMap反序列化失败 ②无参构造未注册JavaTimeModule→LocalDateTime序列化失败 ③最终方案 ObjectMapper.findAndRegisterModules()+activateDefaultTyping(LaissezFaireSubTypeValidator,NON_FINAL)。不影响T9的StringRedisTemplate(ZSet)用法 | 下一步：T13 Swagger 接口文档 + 日志
 - **2026-06-20** — T11 Spring Security JWT 拦截 + 订单归属校验完成 | 验证：JwtAuthFilter(OncePerRequestFilter)从 Authorization Bearer 头取 token→JwtUtil.validateAndGetUserId 验证并解析 userId(存于 claim)→构造 UsernamePasswordAuthenticationToken 设入 SecurityContext；SecurityConfig 改 STATELESS + /users/register|login permitAll + 其余 authenticated + 自定义 entryPoint 返回 ApiResponse 格式 401 JSON + addFilterBefore JwtAuthFilter；JwtUtil 加 validateAndGetUserId(用 jjwt 0.12.x parser.verifyWith.parseSignedClaims.getPayload) + generateToken 加 userId claim；OrderRequest 移除 userId 字段(不信任前端)；OrderService.placeOrder 从 SecurityContext 取 userId；payOrder/cancelOrder 先 findById (不存在→404) 再校验 order.userId==当前用户 (不匹配→403 ForbiddenException) 后才执行条件更新 | 下一步：T12 Redis 缓存商品详情
 - **2026-06-20** — T10 用户模块完成 | 验证：pom.xml 加 spring-boot-starter-security + jjwt 0.12.6(api/impl/jackson)；application.yml 加 jwt.secret(BASE64 随机 256-bit) + jwt.expiration-ms:86400000；User实体 users 表 username 唯一约束 password 密文 role 默认 USER；POST /users/register BCrypt 加密存库 重复用户名→409；POST /users/login 校验密码成功返回 LoginResponse(token+username+expiresInMs) 失败统一 401 "用户名或密码错误"(不区分用户不存在/密码错)；JwtUtil 用 jjwt 0.12.x 新版 API(subject/issuedAt/expiration/signWith)密钥从配置读不硬编码；SecurityConfig permitAll 放行所有接口(完整拦截规则留 T11)；自定义 InvalidCredentialsException 避开 Spring Security 同名 BadCredentialsException 命名冲突 | 下一步：T11 Spring Security 鉴权 + 接口拦截
@@ -231,6 +231,7 @@
 
 - **2026-06-19** — 项目初始化，PLAN.md 创建 ｜ 原因：新项目立项 ｜ 影响：全部 21 个任务已定义
 - **2026-06-19** — PLAN.md 三轮微调 ｜ 原因：① 加阶段标记"第一遍进行中"+ 零基础工作量提醒；② T6 验证降级：JMeter → 简单多线程，避免工具兔子洞；③ T6 验证补充认知要求：理解乐观锁冲突是预期行为而非 bug ｜ 影响：第 2 节状态、T6 验证描述
+- **2026-06-20** — T14 测试发现 T11 归属校验破坏 T9 超时取消 ｜ 原因：cancelOrder 加 getCurrentUserId() 后定时任务无 SecurityContext 抛异常 ｜ 影响：OrderService 抽 doCancel；OrderTimeoutService 改调 doCancel
 - **2026-06-19** — IDE 由 IDEA 改为 VS Code ｜ 原因：现成环境只有 VS Code，单体项目够用 ｜ 影响：T1、T2 验证标准更新
 
 ## 8. 完成复盘（Retrospective）

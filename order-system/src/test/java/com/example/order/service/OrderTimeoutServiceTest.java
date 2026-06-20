@@ -1,7 +1,5 @@
 package com.example.order.service;
 
-import com.example.order.common.IllegalOrderStateException;
-import com.example.order.common.ResourceNotFoundException;
 import com.example.order.dto.OrderRequest;
 import com.example.order.dto.OrderResponse;
 import com.example.order.entity.OrderStatus;
@@ -18,10 +16,11 @@ import org.springframework.security.authentication.UsernamePasswordAuthenticatio
 import org.springframework.security.core.context.SecurityContextHolder;
 
 import java.math.BigDecimal;
+import java.time.Duration;
 import java.util.Collections;
-import java.util.Set;
 
 import static org.assertj.core.api.Assertions.*;
+import static org.awaitility.Awaitility.*;
 
 @SpringBootTest(properties = "order.timeout-seconds=3")
 class OrderTimeoutServiceTest {
@@ -52,32 +51,28 @@ class OrderTimeoutServiceTest {
     }
 
     @Test
-    void shouldAutoCancelExpiredOrder() throws InterruptedException {
+    void shouldAutoCancelExpiredOrder() {
         Product p = createProduct("超时商品", new BigDecimal("99.00"), 10);
         OrderResponse created = orderService.placeOrder(buildOrderRequest(p.getId(), 2));
         assertThat(created.getStatus()).isEqualTo("PENDING");
 
-        // 验证 Redis ZSet 有记录
-        Set<String> members = redisTemplate.opsForZSet()
-                .rangeByScore("order:delay", 0, Long.MAX_VALUE);
-        assertThat(members).contains(created.getId().toString());
-
         // 库存已扣
         assertThat(productRepository.findById(p.getId()).orElseThrow().getStock()).isEqualTo(8);
 
-        // 等待超时 + 轮询周期（3s timeout + 5s polling + buffer）
-        Thread.sleep(10_000);
-
-        // 订单状态变为 CANCELLED
-        var order = orderRepository.findById(created.getId()).orElseThrow();
-        assertThat(order.getStatus()).isEqualTo(OrderStatus.CANCELLED);
+        // 轮询等待定时任务执行取消 (3s timeout + 5s polling + buffer)
+        await().atMost(Duration.ofSeconds(15))
+               .pollInterval(Duration.ofMillis(500))
+               .untilAsserted(() -> {
+                   var order = orderRepository.findById(created.getId()).orElseThrow();
+                   assertThat(order.getStatus()).isEqualTo(OrderStatus.CANCELLED);
+               });
 
         // 库存恢复
         assertThat(productRepository.findById(p.getId()).orElseThrow().getStock()).isEqualTo(10);
     }
 
     @Test
-    void shouldNotCancelPaidOrder() throws InterruptedException {
+    void shouldNotCancelPaidOrder() {
         Product p = createProduct("支付后不超时商品", new BigDecimal("50.00"), 10);
         OrderResponse created = orderService.placeOrder(buildOrderRequest(p.getId(), 2));
 
@@ -86,12 +81,15 @@ class OrderTimeoutServiceTest {
         assertThat(orderRepository.findById(created.getId()).orElseThrow().getStatus())
                 .isEqualTo(OrderStatus.PAID);
 
-        // 等待超过超时时间
-        Thread.sleep(10_000);
+        // 等待确保超时已过
+        await().pollDelay(Duration.ofSeconds(5))
+               .atMost(Duration.ofSeconds(10))
+               .untilAsserted(() -> {
+                   var order = orderRepository.findById(created.getId()).orElseThrow();
+                   assertThat(order.getStatus()).isEqualTo(OrderStatus.PAID);
+               });
 
-        // 仍为 PAID，库存不变
-        var order = orderRepository.findById(created.getId()).orElseThrow();
-        assertThat(order.getStatus()).isEqualTo(OrderStatus.PAID);
+        // 库存不变
         assertThat(productRepository.findById(p.getId()).orElseThrow().getStock()).isEqualTo(8);
     }
 

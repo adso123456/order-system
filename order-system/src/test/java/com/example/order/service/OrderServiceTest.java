@@ -1,5 +1,6 @@
 package com.example.order.service;
 
+import com.example.order.common.ForbiddenException;
 import com.example.order.common.IllegalOrderStateException;
 import com.example.order.common.InsufficientStockException;
 import com.example.order.common.ResourceNotFoundException;
@@ -234,6 +235,36 @@ class OrderServiceTest {
         assertThatThrownBy(() -> orderService.cancelOrder(99999L))
                 .isInstanceOf(ResourceNotFoundException.class)
                 .hasMessageContaining("订单不存在");
+    }
+
+    // ===== T11 归属校验: A 不能操作 B 的订单 =====
+
+    @Test
+    void shouldRejectPayWhenNotOwner() {
+        Product p = createProduct("归属测试商品A", new BigDecimal("50.00"), 10);
+        setAuth(1L);
+        OrderResponse created = orderService.placeOrder(buildOrderRequest(p.getId(), 1));
+
+        // 切到用户 B
+        setAuth(2L);
+
+        assertThatThrownBy(() -> orderService.payOrder(created.getId()))
+                .isInstanceOf(ForbiddenException.class)
+                .hasMessageContaining("无权操作该订单");
+    }
+
+    @Test
+    void shouldRejectCancelWhenNotOwner() {
+        Product p = createProduct("归属测试商品B", new BigDecimal("50.00"), 10);
+        setAuth(1L);
+        OrderResponse created = orderService.placeOrder(buildOrderRequest(p.getId(), 1));
+
+        // 切到用户 B
+        setAuth(2L);
+
+        assertThatThrownBy(() -> orderService.cancelOrder(created.getId()))
+                .isInstanceOf(ForbiddenException.class)
+                .hasMessageContaining("无权操作该订单");
     }
 
     // ===== 辅助方法 =====
