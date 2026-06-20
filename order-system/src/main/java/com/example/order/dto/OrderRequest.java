@@ -8,15 +8,9 @@ import java.util.List;
 
 public class OrderRequest {
 
-    @NotNull(message = "userId 不能为空")
-    private Long userId;
-
     @NotEmpty(message = "订单明细不能为空")
     @Valid
     private List<OrderItemRequest> items;
-
-    public Long getUserId() { return userId; }
-    public void setUserId(Long userId) { this.userId = userId; }
 
     public List<OrderItemRequest> getItems() { return items; }
     public void setItems(List<OrderItemRequest> items) { this.items = items; }

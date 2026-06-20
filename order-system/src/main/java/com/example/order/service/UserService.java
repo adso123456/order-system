@@ -43,7 +43,7 @@ public class UserService {
         if (!passwordEncoder.matches(request.getPassword(), user.getPassword())) {
             throw new InvalidCredentialsException("用户名或密码错误");
         }
-        String token = jwtUtil.generateToken(user.getUsername());
+        String token = jwtUtil.generateToken(user.getId(), user.getUsername());
         return new LoginResponse(token, user.getUsername(), jwtUtil.getExpirationMs());
     }
 }

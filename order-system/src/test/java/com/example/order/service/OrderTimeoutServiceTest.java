@@ -8,11 +8,14 @@ import com.example.order.entity.OrderStatus;
 import com.example.order.entity.Product;
 import com.example.order.repository.OrderRepository;
 import com.example.order.repository.ProductRepository;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.data.redis.core.StringRedisTemplate;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.context.SecurityContextHolder;
 
 import java.math.BigDecimal;
 import java.util.Collections;
@@ -40,12 +43,18 @@ class OrderTimeoutServiceTest {
         orderRepository.deleteAll();
         productRepository.deleteAll();
         redisTemplate.delete("order:delay");
+        setAuth(1L);
+    }
+
+    @AfterEach
+    void tearDown() {
+        SecurityContextHolder.clearContext();
     }
 
     @Test
     void shouldAutoCancelExpiredOrder() throws InterruptedException {
         Product p = createProduct("超时商品", new BigDecimal("99.00"), 10);
-        OrderResponse created = orderService.placeOrder(buildOrderRequest(1L, p.getId(), 2));
+        OrderResponse created = orderService.placeOrder(buildOrderRequest(p.getId(), 2));
         assertThat(created.getStatus()).isEqualTo("PENDING");
 
         // 验证 Redis ZSet 有记录
@@ -70,7 +79,7 @@ class OrderTimeoutServiceTest {
     @Test
     void shouldNotCancelPaidOrder() throws InterruptedException {
         Product p = createProduct("支付后不超时商品", new BigDecimal("50.00"), 10);
-        OrderResponse created = orderService.placeOrder(buildOrderRequest(1L, p.getId(), 2));
+        OrderResponse created = orderService.placeOrder(buildOrderRequest(p.getId(), 2));
 
         // 立即支付
         orderService.payOrder(created.getId());
@@ -92,9 +101,13 @@ class OrderTimeoutServiceTest {
         return productRepository.save(p);
     }
 
-    private OrderRequest buildOrderRequest(Long userId, Long productId, int quantity) {
+    private void setAuth(Long userId) {
+        SecurityContextHolder.getContext().setAuthentication(
+                new UsernamePasswordAuthenticationToken(userId, null, Collections.emptyList()));
+    }
+
+    private OrderRequest buildOrderRequest(Long productId, int quantity) {
         OrderRequest req = new OrderRequest();
-        req.setUserId(userId);
         OrderRequest.OrderItemRequest item = new OrderRequest.OrderItemRequest();
         item.setProductId(productId);
         item.setQuantity(quantity);

@@ -10,10 +10,14 @@ import com.example.order.entity.OrderStatus;
 import com.example.order.entity.Product;
 import com.example.order.repository.OrderRepository;
 import com.example.order.repository.ProductRepository;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.context.SecurityContextHolder;
+
 import java.math.BigDecimal;
 import java.util.Collections;
 import java.util.List;
@@ -40,6 +44,12 @@ class OrderServiceTest {
     void setUp() {
         orderRepository.deleteAll();
         productRepository.deleteAll();
+        setAuth(1L);
+    }
+
+    @AfterEach
+    void tearDown() {
+        SecurityContextHolder.clearContext();
     }
 
     // ===== 测试1: 正常下单 =====
@@ -47,7 +57,7 @@ class OrderServiceTest {
     void shouldPlaceOrderSuccessfully() {
         Product p = createProduct("测试商品", new BigDecimal("29.90"), 5);
 
-        OrderRequest req = buildOrderRequest(1L, p.getId(), 2);
+        OrderRequest req = buildOrderRequest(p.getId(), 2);
         OrderResponse resp = orderService.placeOrder(req);
 
         assertThat(resp.getStatus()).isEqualTo("PENDING");
@@ -65,7 +75,7 @@ class OrderServiceTest {
     void shouldRejectWhenStockInsufficient() {
         Product p = createProduct("限量商品", new BigDecimal("100.00"), 1);
 
-        OrderRequest req = buildOrderRequest(1L, p.getId(), 5);
+        OrderRequest req = buildOrderRequest(p.getId(), 5);
 
         assertThatThrownBy(() -> orderService.placeOrder(req))
                 .isInstanceOf(InsufficientStockException.class)
@@ -92,7 +102,8 @@ class OrderServiceTest {
             final long userId = 100 + i;
             executor.submit(() -> {
                 try {
-                    OrderRequest req = buildOrderRequest(userId, p.getId(), quantityPerOrder);
+                    setAuth(userId);
+                    OrderRequest req = buildOrderRequest(p.getId(), quantityPerOrder);
                     orderService.placeOrder(req);
                     successCount.incrementAndGet();
                 } catch (Exception e) {
@@ -123,7 +134,7 @@ class OrderServiceTest {
     @Test
     void shouldPayOrderSuccessfully() {
         Product p = createProduct("支付测试商品", new BigDecimal("99.00"), 10);
-        OrderResponse created = orderService.placeOrder(buildOrderRequest(1L, p.getId(), 1));
+        OrderResponse created = orderService.placeOrder(buildOrderRequest(p.getId(), 1));
         assertThat(created.getStatus()).isEqualTo("PENDING");
 
         OrderResponse paid = orderService.payOrder(created.getId());
@@ -134,7 +145,7 @@ class OrderServiceTest {
     @Test
     void shouldRejectDuplicatePayment() {
         Product p = createProduct("重复支付商品", new BigDecimal("50.00"), 5);
-        OrderResponse created = orderService.placeOrder(buildOrderRequest(1L, p.getId(), 1));
+        OrderResponse created = orderService.placeOrder(buildOrderRequest(p.getId(), 1));
         orderService.payOrder(created.getId()); // 第一次支付成功
 
         assertThatThrownBy(() -> orderService.payOrder(created.getId()))
@@ -152,7 +163,7 @@ class OrderServiceTest {
     @Test
     void shouldRejectPaymentForCancelledOrder() {
         Product p = createProduct("已取消商品", new BigDecimal("30.00"), 5);
-        OrderResponse created = orderService.placeOrder(buildOrderRequest(1L, p.getId(), 1));
+        OrderResponse created = orderService.placeOrder(buildOrderRequest(p.getId(), 1));
 
         // 手动改为 CANCELLED（模拟 T8 场景）
         Order order = orderRepository.findById(created.getId()).orElseThrow();
@@ -169,7 +180,7 @@ class OrderServiceTest {
     @Test
     void shouldCancelOrderSuccessfully() {
         Product p = createProduct("取消测试商品", new BigDecimal("50.00"), 10);
-        OrderResponse created = orderService.placeOrder(buildOrderRequest(1L, p.getId(), 2));
+        OrderResponse created = orderService.placeOrder(buildOrderRequest(p.getId(), 2));
         assertThat(created.getStatus()).isEqualTo("PENDING");
 
         // 下单后库存扣减
@@ -188,7 +199,7 @@ class OrderServiceTest {
     @Test
     void shouldRejectDuplicateCancel() {
         Product p = createProduct("重复取消商品", new BigDecimal("50.00"), 10);
-        OrderResponse created = orderService.placeOrder(buildOrderRequest(1L, p.getId(), 2));
+        OrderResponse created = orderService.placeOrder(buildOrderRequest(p.getId(), 2));
 
         orderService.cancelOrder(created.getId()); // 第一次取消
 
@@ -205,7 +216,7 @@ class OrderServiceTest {
     @Test
     void shouldRejectCancelForPaidOrder() {
         Product p = createProduct("已支付取消商品", new BigDecimal("99.00"), 5);
-        OrderResponse created = orderService.placeOrder(buildOrderRequest(1L, p.getId(), 1));
+        OrderResponse created = orderService.placeOrder(buildOrderRequest(p.getId(), 1));
         orderService.payOrder(created.getId());
 
         // 取消已支付订单应返回 409
@@ -231,9 +242,13 @@ class OrderServiceTest {
         return productRepository.save(p);
     }
 
-    private OrderRequest buildOrderRequest(Long userId, Long productId, int quantity) {
+    private void setAuth(Long userId) {
+        SecurityContextHolder.getContext().setAuthentication(
+                new UsernamePasswordAuthenticationToken(userId, null, Collections.emptyList()));
+    }
+
+    private OrderRequest buildOrderRequest(Long productId, int quantity) {
         OrderRequest req = new OrderRequest();
-        req.setUserId(userId);
         OrderRequest.OrderItemRequest item = new OrderRequest.OrderItemRequest();
         item.setProductId(productId);
         item.setQuantity(quantity);

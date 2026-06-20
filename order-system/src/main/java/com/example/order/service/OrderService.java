@@ -1,5 +1,6 @@
 package com.example.order.service;
 
+import com.example.order.common.ForbiddenException;
 import com.example.order.common.IllegalOrderStateException;
 import com.example.order.common.InsufficientStockException;
 import com.example.order.common.ResourceNotFoundException;
@@ -13,6 +14,8 @@ import com.example.order.repository.OrderRepository;
 import com.example.order.repository.ProductRepository;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.redis.core.StringRedisTemplate;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -73,7 +76,7 @@ public class OrderService {
         // 3. 构建订单
         Order order = new Order();
         order.setOrderNo(generateOrderNo());
-        order.setUserId(request.getUserId());
+        order.setUserId(getCurrentUserId());
         order.setStatus(OrderStatus.PENDING);
 
         BigDecimal totalAmount = BigDecimal.ZERO;
@@ -107,34 +110,48 @@ public class OrderService {
 
     @Transactional
     public OrderResponse payOrder(Long orderId) {
+        // verify ownership
+        Order order = orderRepository.findById(orderId)
+                .orElseThrow(() -> new ResourceNotFoundException("订单不存在: id=" + orderId));
+        if (!order.getUserId().equals(getCurrentUserId())) {
+            throw new ForbiddenException("无权操作该订单");
+        }
         // 条件更新：只更新 PENDING 状态的订单，原子操作无需加锁
         int updated = orderRepository.payOrder(orderId, OrderStatus.PAID, OrderStatus.PENDING, LocalDateTime.now());
         if (updated == 0) {
-            if (!orderRepository.existsById(orderId)) {
-                throw new ResourceNotFoundException("订单不存在: id=" + orderId);
-            }
             throw new IllegalOrderStateException("订单状态不允许支付");
         }
         // clearAutomatically 已清空持久化上下文，findById 读到 PAID 状态
-        Order order = orderRepository.findById(orderId).orElseThrow();
+        order = orderRepository.findById(orderId).orElseThrow();
         return OrderResponse.fromEntity(order);
     }
 
     @Transactional
     public OrderResponse cancelOrder(Long orderId) {
+        // verify ownership
+        Order order = orderRepository.findById(orderId)
+                .orElseThrow(() -> new ResourceNotFoundException("订单不存在: id=" + orderId));
+        if (!order.getUserId().equals(getCurrentUserId())) {
+            throw new ForbiddenException("无权操作该订单");
+        }
         int updated = orderRepository.cancelOrder(orderId, OrderStatus.PENDING);
         if (updated == 0) {
-            if (!orderRepository.existsById(orderId)) {
-                throw new ResourceNotFoundException("订单不存在: id=" + orderId);
-            }
             throw new IllegalOrderStateException("订单状态不允许取消");
         }
         // 恢复库存（仅在实际取消时执行，确保幂等取消不会多还库存）
-        Order order = orderRepository.findById(orderId).orElseThrow();
+        order = orderRepository.findById(orderId).orElseThrow();
         for (OrderItem item : order.getItems()) {
             productRepository.restoreStock(item.getProductId(), item.getQuantity());
         }
         return OrderResponse.fromEntity(order);
+    }
+
+    private Long getCurrentUserId() {
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        if (auth == null || !auth.isAuthenticated() || auth.getPrincipal() == null) {
+            throw new ForbiddenException("未登录");
+        }
+        return (Long) auth.getPrincipal();
     }
 
     private String generateOrderNo() {
