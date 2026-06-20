@@ -50,6 +50,18 @@ public class GlobalExceptionHandler {
         return ApiResponse.error(409, ex.getMessage());
     }
 
+    @ExceptionHandler(DuplicateUsernameException.class)
+    @ResponseStatus(HttpStatus.CONFLICT)
+    public ApiResponse<Void> handleDuplicateUsername(DuplicateUsernameException ex) {
+        return ApiResponse.error(409, ex.getMessage());
+    }
+
+    @ExceptionHandler(InvalidCredentialsException.class)
+    @ResponseStatus(HttpStatus.UNAUTHORIZED)
+    public ApiResponse<Void> handleInvalidCredentials(InvalidCredentialsException ex) {
+        return ApiResponse.error(401, ex.getMessage());
+    }
+
     @ExceptionHandler(Exception.class)
     @ResponseStatus(HttpStatus.INTERNAL_SERVER_ERROR)
     public ApiResponse<Void> handleOther(Exception ex) {

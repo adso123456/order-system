@@ -4,7 +4,7 @@
 > 新对话接手项目时，先完整读这份文件再动手。
 
 **状态**：第一遍进行中
-**创建于**：2026-06-19　**最后更新**：2026-06-19 17:55
+**创建于**：2026-06-19　**最后更新**：2026-06-20 11:30
 
 > ⚠️ **对零基础的提醒**：第一遍 T1~T15 看起来是 15 个任务，实际是正常节奏下**好几个月**的工程量。这不是缺点，是现实——你在从零搭建一个完整后端系统。把"第一遍完成"当成一个真正的里程碑去庆祝，别做完就立刻冲第二遍。
 
@@ -142,10 +142,10 @@
   - 依赖：T8
   - 验证：下单后超时未支付 → 自动 CANCELLED + 库存恢复；下单后立即支付 → 到期仍是 PAID 不被误取消；Redis ZSet 确认有记录
 
-- [ ] **T10** 用户模块 — 注册 + BCrypt 加密 + JWT 登录
-  - 文件：`entity/User.java`、`repository/UserRepository.java`、`dto/RegisterRequest.java`、`dto/LoginRequest.java`、`dto/LoginResponse.java`、`service/UserService.java`、`controller/UserController.java`、`security/JwtUtil.java`
+- [x] **T10** 用户模块 — 注册 + BCrypt 加密 + JWT 登录 ✅ 已完成
+  - 文件：`entity/User.java`、`repository/UserRepository.java`、`dto/UserRegisterRequest.java`、`dto/UserLoginRequest.java`、`dto/UserResponse.java`、`dto/LoginResponse.java`、`service/UserService.java`、`controller/UserController.java`、`util/JwtUtil.java`、`config/SecurityConfig.java`、`common/DuplicateUsernameException.java`、`common/InvalidCredentialsException.java`
   - 依赖：T5（不依赖订单模块，可并行）
-  - 验证：注册成功，数据库密码为密文；登录成功返回 JWT token；用错密码登录返回 401
+  - 验证：注册成功数据库密码为 BCrypt 密文($2a$10$...) √；重复用户名→409 "用户名已存在" √；登录成功返回 token+username+expiresInMs √；密码错误→401 "用户名或密码错误" √；用户不存在→同样 401(模糊化) √；引入 security 后旧接口仍可访问(permitAll) √
 
 - [ ] **T11** Spring Security 集成 — 鉴权 + 接口拦截
   - 文件：`security/SecurityConfig.java`、`security/JwtAuthFilter.java`、`security/JwtUtil.java`（完善）
@@ -205,12 +205,13 @@
   - 依赖：T18
   - 验证：改写后的接口行为与改写前完全一致，能说出 JPA 和 MyBatis 的差异
 
-**👈 当前进行到**：T10
+**👈 当前进行到**：T11
 
 ## 6. 进度日志（Progress Log）
 
 > 每完成一步追加一条，最新的放最上面。
 
+- **2026-06-20** — T10 用户模块完成 | 验证：pom.xml 加 spring-boot-starter-security + jjwt 0.12.6(api/impl/jackson)；application.yml 加 jwt.secret(BASE64 随机 256-bit) + jwt.expiration-ms:86400000；User实体 users 表 username 唯一约束 password 密文 role 默认 USER；POST /users/register BCrypt 加密存库 重复用户名→409；POST /users/login 校验密码成功返回 LoginResponse(token+username+expiresInMs) 失败统一 401 "用户名或密码错误"(不区分用户不存在/密码错)；JwtUtil 用 jjwt 0.12.x 新版 API(subject/issuedAt/expiration/signWith)密钥从配置读不硬编码；SecurityConfig permitAll 放行所有接口(完整拦截规则留 T11)；自定义 InvalidCredentialsException 避开 Spring Security 同名 BadCredentialsException 命名冲突 | 下一步：T11 Spring Security 鉴权 + 接口拦截
 - **2026-06-19** — T9 Redis 超时自动取消完成 ｜ 验证：pom.xml 加 spring-boot-starter-data-redis；application.yml 配 Redis(localhost:6379) + order.timeout-seconds:60；OrderService.placeOrder 下单后写 Redis ZSet(order:delay, score=deadline)；启动类加 @EnableScheduling；OrderTimeoutService @Scheduled(fixedRate=5s) 轮询 ZRANGEBYSCORE 捞出到期订单，逐个调 cancelOrder（复用 T8 的 cancelOrder 方法），捕获 IllegalOrderStateException/ResourceNotFoundException 正常跳过，处理完 ZREM 移除。支付不删 ZSet，靠 cancelOrder 状态校验兜底。测试：超时未支付 → 自动 CANCELLED + 库存恢复 √；立即支付 → 到期仍是 PAID 库存不变 √ ｜ 下一步：T10 用户模块 JWT ｜ 验证：POST /orders/{id}/cancel，OrderRepository.cancelOrder 条件更新 `UPDATE orders SET status='CANCELLED' WHERE id=? AND status='PENDING'`（JPQL 枚举常量，clearAutomatically=true）；ProductRepository.restoreStock 纯原子增 `SET stock=stock+? WHERE id=?`（不走 @Version 避免恢复时冲突）；@Transactional cancelOrder 先改状态再逐商品恢复库存；幂等保证：条件更新 0 行时 existsById 区分 404/409，仅影响 1 行才恢复库存。测试覆盖：正常取消（库存 8→10）√、重复取消（第二次 409 库存保持 10 不变成 12）√、取消已支付订单（409 库存不动）√、取消不存在订单（404）√。**cancelOrder 方法已抽成独立可复用方法，T9 超时取消直接复用** ｜ 下一步：T9 Redis 超时自动取消 ｜ 验证：POST /orders/{id}/pay，条件更新 `UPDATE SET status=PAID, paid_at=NOW WHERE id=? AND status='PENDING'` 原子操作，影响行数判结果（1→成功，0→existsById 区分 404/409）；PENDING→PAID 正常支付 paidAt 有值；重复支付→409；不存在→404；CANCELLED→409；OrderStatus 枚举加 PAID/CANCELLED；IllegalOrderStateException→409 ｜ 下一步：T8 用户主动取消订单
 - **2026-06-19** — T6 订单模块完成 ｜ 验证：Order + OrderItem 实体建表（orders/order_item），POST /orders 下单接口（@Transactional 事务内查商品→扣库存→建订单明细），@Version 乐观锁扣库存，ObjectOptimisticLockingFailureException→409，InsufficientStockException→400；并发 20 线程抢 10 库存，定理验证通过（stock≥0 且扣减守恒）。**🪤 踩坑记录：乐观锁的并发测试不应该追求"恰好 N 次成功"，因为 MySQL REPEATABLE_READ 快照隔离下，前几个事务会在第一轮提交前读到相同旧版本，仅少数成功。乐观锁只保证不超卖，不保证能卖完——正确断言是"库存≥0 + 扣减守恒定理"。之前为了凑"恰好 10 成功"反复调时序（随机 jitter/提交间隔/flush），最后全回退了——测试是用来验证逻辑的，不能反过来改业务代码迎合测试预期。** ｜ 下一步：T7 模拟支付接口
 - **2026-06-19** — T5 全局异常处理 + 统一返回结构完成 ｜ 验证：ApiResponse<T> (code/message/data) 统一包裹所有返回；ResourceNotFoundException→404 (HTTP 状态码=body code)；MethodArgumentNotValidException→400 收集全部字段错误；兜底 Exception→500 不暴露堆栈(仅 log.error) ｜ 下一步：T6 订单模块 Entity+建表+下单(事务+乐观锁)

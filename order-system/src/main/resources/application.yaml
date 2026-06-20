@@ -18,5 +18,9 @@ spring:
       host: localhost
       port: 6379
 
+jwt:
+  secret: Bf/ZBtc1ZQeYOIAioy/5pwdc6JN6UCztWaiPerTpxLM=
+  expiration-ms: 86400000
+
 order:
   timeout-seconds: 60
