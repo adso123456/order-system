@@ -7,6 +7,9 @@ import com.example.order.repository.ProductRepository;
 import org.springframework.stereotype.Service;
 
 import com.example.order.common.ResourceNotFoundException;
+import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.cache.annotation.Cacheable;
+
 import java.util.List;
 
 @Service
@@ -27,6 +30,7 @@ public class ProductService {
         return ProductResponse.fromEntity(saved);
     }
 
+    @Cacheable(value = "product", key = "#id")
     public ProductResponse findById(Long id) {
         Product product = productRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("商品不存在: id=" + id));
@@ -39,6 +43,7 @@ public class ProductService {
                 .toList();
     }
 
+    @CacheEvict(value = "product", key = "#id")
     public ProductResponse update(Long id, ProductRequest request) {
         Product product = productRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("商品不存在: id=" + id));
@@ -49,6 +54,7 @@ public class ProductService {
         return ProductResponse.fromEntity(saved);
     }
 
+    @CacheEvict(value = "product", key = "#id")
     public void delete(Long id) {
         if (!productRepository.existsById(id)) {
             throw new ResourceNotFoundException("商品不存在: id=" + id);

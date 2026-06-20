@@ -152,12 +152,13 @@
   - 依赖：T10
   - 验证：无 token→401 统一 ApiResponse 格式 √；注册/登录免 token √；合法 token 正常访问 √；下单 userId 来自 SecurityContext(不信任前端) √；用户 A 取消用户 B 订单→403 "无权操作该订单" √；过期/乱码 token→401(不报 500) √
 
-- [ ] **T12** Redis 缓存商品详情
+- [x] **T12** Redis 缓存商品详情 ✅ 已完成
   - 文件：`service/ProductService.java`（加缓存注解）、`config/CacheConfig.java`
   - 依赖：T5、T9（需要 Redis 已通）
-  - 验证：第一次查商品走数据库，第二次查走缓存（看日志或响应时间）；更新商品后缓存失效；缓存有过期时间
+  - 验证：第一次查商品有SQL第二次零SQL(日志行数增量证明)√；更新商品后缓存失效→重新走库拿到新数据 √；redis-cli 看到 product::93 可读JSON且有TTL(≈10分钟) √
+	  - 🪤 踩坑：①自定义ObjectMapper未开activateDefaultTyping→LinkedHashMap反序列化失败 ②无参构造未注册JavaTimeModule→LocalDateTime序列化失败 ③最终方案：ObjectMapper.findAndRegisterModules()+activateDefaultTyping(LaissezFaireSubTypeValidator,NON_FINAL)
 
-- [ ] **T13** Swagger 接口文档 + 日志
+- [ ] **T13** Swagger 接口文档 + 日志 👈 当前
   - 文件：`pom.xml`（加 springdoc 依赖）、`config/SwaggerConfig.java`（可选）、`application.yml`（日志配置）
   - 依赖：T11（所有接口基本就绪）
   - 验证：访问 `http://localhost:8080/swagger-ui.html` 能看到所有接口并可在线调试；日志输出到控制台且格式清晰
@@ -205,12 +206,13 @@
   - 依赖：T18
   - 验证：改写后的接口行为与改写前完全一致，能说出 JPA 和 MyBatis 的差异
 
-**👈 当前进行到**：T12
+**👈 当前进行到**：T13
 
 ## 6. 进度日志（Progress Log）
 
 > 每完成一步追加一条，最新的放最上面。
 
+- **2026-06-20** — T12 Redis 缓存商品详情完成 | 验证：@EnableCaching + RedisCacheManager(GenericJackson2JsonRedisSerializer JSON序列化,TTL 10分钟)；ProductService.findById @Cacheable(product::id)；update/delete @CacheEvict。日志增量证明缓存命中(两次查询仅1条SELECT)。redis-cli 确认 product::id 可读JSON且有TTL。🪤 缓存序列化踩坑：①自定义ObjectMapper未开activateDefaultTyping→LinkedHashMap反序列化失败 ②无参构造未注册JavaTimeModule→LocalDateTime序列化失败 ③最终方案 ObjectMapper.findAndRegisterModules()+activateDefaultTyping(LaissezFaireSubTypeValidator,NON_FINAL)。不影响T9的StringRedisTemplate(ZSet)用法 | 下一步：T13 Swagger 接口文档 + 日志
 - **2026-06-20** — T11 Spring Security JWT 拦截 + 订单归属校验完成 | 验证：JwtAuthFilter(OncePerRequestFilter)从 Authorization Bearer 头取 token→JwtUtil.validateAndGetUserId 验证并解析 userId(存于 claim)→构造 UsernamePasswordAuthenticationToken 设入 SecurityContext；SecurityConfig 改 STATELESS + /users/register|login permitAll + 其余 authenticated + 自定义 entryPoint 返回 ApiResponse 格式 401 JSON + addFilterBefore JwtAuthFilter；JwtUtil 加 validateAndGetUserId(用 jjwt 0.12.x parser.verifyWith.parseSignedClaims.getPayload) + generateToken 加 userId claim；OrderRequest 移除 userId 字段(不信任前端)；OrderService.placeOrder 从 SecurityContext 取 userId；payOrder/cancelOrder 先 findById (不存在→404) 再校验 order.userId==当前用户 (不匹配→403 ForbiddenException) 后才执行条件更新 | 下一步：T12 Redis 缓存商品详情
 - **2026-06-20** — T10 用户模块完成 | 验证：pom.xml 加 spring-boot-starter-security + jjwt 0.12.6(api/impl/jackson)；application.yml 加 jwt.secret(BASE64 随机 256-bit) + jwt.expiration-ms:86400000；User实体 users 表 username 唯一约束 password 密文 role 默认 USER；POST /users/register BCrypt 加密存库 重复用户名→409；POST /users/login 校验密码成功返回 LoginResponse(token+username+expiresInMs) 失败统一 401 "用户名或密码错误"(不区分用户不存在/密码错)；JwtUtil 用 jjwt 0.12.x 新版 API(subject/issuedAt/expiration/signWith)密钥从配置读不硬编码；SecurityConfig permitAll 放行所有接口(完整拦截规则留 T11)；自定义 InvalidCredentialsException 避开 Spring Security 同名 BadCredentialsException 命名冲突 | 下一步：T11 Spring Security 鉴权 + 接口拦截
 - **2026-06-19** — T9 Redis 超时自动取消完成 ｜ 验证：pom.xml 加 spring-boot-starter-data-redis；application.yml 配 Redis(localhost:6379) + order.timeout-seconds:60；OrderService.placeOrder 下单后写 Redis ZSet(order:delay, score=deadline)；启动类加 @EnableScheduling；OrderTimeoutService @Scheduled(fixedRate=5s) 轮询 ZRANGEBYSCORE 捞出到期订单，逐个调 cancelOrder（复用 T8 的 cancelOrder 方法），捕获 IllegalOrderStateException/ResourceNotFoundException 正常跳过，处理完 ZREM 移除。支付不删 ZSet，靠 cancelOrder 状态校验兜底。测试：超时未支付 → 自动 CANCELLED + 库存恢复 √；立即支付 → 到期仍是 PAID 库存不变 √ ｜ 下一步：T10 用户模块 JWT ｜ 验证：POST /orders/{id}/cancel，OrderRepository.cancelOrder 条件更新 `UPDATE orders SET status='CANCELLED' WHERE id=? AND status='PENDING'`（JPQL 枚举常量，clearAutomatically=true）；ProductRepository.restoreStock 纯原子增 `SET stock=stock+? WHERE id=?`（不走 @Version 避免恢复时冲突）；@Transactional cancelOrder 先改状态再逐商品恢复库存；幂等保证：条件更新 0 行时 existsById 区分 404/409，仅影响 1 行才恢复库存。测试覆盖：正常取消（库存 8→10）√、重复取消（第二次 409 库存保持 10 不变成 12）√、取消已支付订单（409 库存不动）√、取消不存在订单（404）√。**cancelOrder 方法已抽成独立可复用方法，T9 超时取消直接复用** ｜ 下一步：T9 Redis 超时自动取消 ｜ 验证：POST /orders/{id}/pay，条件更新 `UPDATE SET status=PAID, paid_at=NOW WHERE id=? AND status='PENDING'` 原子操作，影响行数判结果（1→成功，0→existsById 区分 404/409）；PENDING→PAID 正常支付 paidAt 有值；重复支付→409；不存在→404；CANCELLED→409；OrderStatus 枚举加 PAID/CANCELLED；IllegalOrderStateException→409 ｜ 下一步：T8 用户主动取消订单
