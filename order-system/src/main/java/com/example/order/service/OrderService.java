@@ -1,5 +1,8 @@
 package com.example.order.service;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import com.example.order.common.ForbiddenException;
 import com.example.order.common.IllegalOrderStateException;
 import com.example.order.common.InsufficientStockException;
@@ -31,6 +34,8 @@ import java.util.stream.Collectors;
 @Service
 public class OrderService {
 
+    private static final Logger log = LoggerFactory.getLogger(OrderService.class);
+
     private final OrderRepository orderRepository;
     private final ProductRepository productRepository;
     private final StringRedisTemplate redisTemplate;
@@ -48,6 +53,7 @@ public class OrderService {
 
     @Transactional
     public OrderResponse placeOrder(OrderRequest request) {
+        log.info("下单请求: userId={}, items={}", getCurrentUserId(), request.getItems().size());
         // 1. 批量查询商品
         List<Long> productIds = request.getItems().stream()
                 .map(OrderRequest.OrderItemRequest::getProductId)
@@ -105,11 +111,13 @@ public class OrderService {
         // 写入 Redis ZSet 延时队列，score = 当前时间戳 + 超时秒数
         long deadline = Instant.now().getEpochSecond() + timeoutSeconds;
         redisTemplate.opsForZSet().add("order:delay", saved.getId().toString(), deadline);
+        log.info("下单成功: orderId={}, orderNo={}", saved.getId(), saved.getOrderNo());
         return OrderResponse.fromEntity(saved);
     }
 
     @Transactional
     public OrderResponse payOrder(Long orderId) {
+        log.info("支付请求: orderId={}", orderId);
         // verify ownership
         Order order = orderRepository.findById(orderId)
                 .orElseThrow(() -> new ResourceNotFoundException("订单不存在: id=" + orderId));
@@ -123,11 +131,13 @@ public class OrderService {
         }
         // clearAutomatically 已清空持久化上下文，findById 读到 PAID 状态
         order = orderRepository.findById(orderId).orElseThrow();
+        log.info("支付成功: orderId={}", orderId);
         return OrderResponse.fromEntity(order);
     }
 
     @Transactional
     public OrderResponse cancelOrder(Long orderId) {
+        log.info("取消订单请求: orderId={}", orderId);
         // verify ownership
         Order order = orderRepository.findById(orderId)
                 .orElseThrow(() -> new ResourceNotFoundException("订单不存在: id=" + orderId));
@@ -143,6 +153,7 @@ public class OrderService {
         for (OrderItem item : order.getItems()) {
             productRepository.restoreStock(item.getProductId(), item.getQuantity());
         }
+        log.info("取消订单成功: orderId={}", orderId);
         return OrderResponse.fromEntity(order);
     }
 

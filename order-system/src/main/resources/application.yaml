@@ -24,3 +24,9 @@ jwt:
 
 order:
   timeout-seconds: 60
+
+logging:
+  pattern:
+    console: "%d{HH:mm:ss} %-5level %logger{36} - %msg%n"
+  level:
+    com.example.order: INFO
